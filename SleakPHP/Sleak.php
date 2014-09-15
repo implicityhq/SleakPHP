@@ -60,6 +60,42 @@ function normalizeParameterData($array) {
 }
 
 /**
+ * Sleak Helper Class `SleakInput`
+ */
+class SleakInput {
+  public static $array;
+
+  public static function detect($method) {
+    switch($method) {
+      case 'GET':
+        if (! $query = $_SERVER['QUERY_STRING']) {
+          $uri = $_SERVER['REQUEST_URI'];
+          $query = parse_url($uri, PHP_URL_QUERY);
+        }
+        parse_str($query, static::$array);
+        break;
+
+      case 'POST':
+        static::$array = $_POST;
+        break;
+
+      default:
+        parse_str(file_get_contents('php://input'), static::$array);
+    }
+  }
+
+  public static function get($key = null, $fallback = null) {
+    if (is_null($key)) return static::$array;
+
+    if (isset(static::$array[$key])) {
+      return static::$array[$key];
+    } else {
+      return $fallback;
+    }
+  }
+}
+
+/**
  * Sleak Exception
  */
 
@@ -98,6 +134,11 @@ class Sleak {
   const SLEAK_Authorization_Key = 'authorization';
 
   protected $privateKeyCallback, $fetchReplayCallback, $insertReplayCallback;
+
+  public function __construct() {
+    SleakInput::detect($_SERVER['REQUEST_METHOD']);
+    return $this;
+  }
 
   public function setPrivateKeyLookupCallback($lookupCallback) {
     if (is_callable($lookupCallback)) {
@@ -161,17 +202,7 @@ class Sleak {
 
     $requestVars = null;
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-      $requestVars = $_POST;
-    } else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-      $requestVars = $_GET;
-    } else {
-      if ($fatal) {
-        throw new SleakException('Invalid request method.', SleakException::SLEAK_User_Error);
-      }
-
-      return (new SleakResponse(false, 'unabled_to_complete', 'Invalid request method.'));
-    }
+    $requestVars = SleakInput::$array;
 
     $params = normalizeParameterData($requestVars);
     ksort($params);
